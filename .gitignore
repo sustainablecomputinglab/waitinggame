@@ -2,5 +2,4 @@ traces
 .vscode
 .DS_STORE
 *.pyc
-synthetic_traces
 nohup.out
