@@ -1,1 +1,1 @@
-# waitinggame
+# Code Repository for paper submission
