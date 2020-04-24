@@ -1,3 +1,21 @@
 # Code Repository for paper submission
 
-Real World Trace (hdf format): https://umass.box.com/s/53qbzafs27wu28jh165twykqegwerud3
+In this repository, we host the code for our SC paper submission. The repository consists of implementation for following contributions (sections)
+
+* Model Analyzer
+* Synthetic Trace Generator
+* Simulator
+
+To run code implementation for each of these sections, please check readme file in their respective folders.
+
+## Requirements
+
+1. Python3.6
+
+2. Python libraries from attachment requirement.txt file.
+
+## Data Format
+
+In this work, we use pandas to read the data sets (or traces) and the pandas dataframes are used as input to the implemented simulator.
+
+Please note that Real World Trace (hdf format): https://umass.box.com/s/53qbzafs27wu28jh165twykqegwerud3

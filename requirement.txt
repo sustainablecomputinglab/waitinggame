@@ -2,7 +2,7 @@ numpy
 pandas==0.25.3
 swifter
 matplotlib
-tables
+pytables
 sortedcontainers
 scikit-learn
 mypy
