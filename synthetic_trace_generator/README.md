@@ -15,5 +15,6 @@ year_ = 2025
 start_t = datetime(year=2025, month=1, day=1, hour=0, minute=0, second=0)
 N = 2000000
 # call the function
-generate_synthetic_data(lambda_s, lambda_a, start_t, N, year_, save_to_disk=True, save_loc="../synthetic_traces/")
+save_location="Save address"
+generate_synthetic_data(lambda_s, lambda_a, start_t, N, year_, save_to_disk=True, save_loc=save_location)
 ```

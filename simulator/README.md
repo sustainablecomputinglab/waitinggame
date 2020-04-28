@@ -1,6 +1,6 @@
 # Implementation of event based simulator
 
-We implemented a trace-driven job simulator in python that mimics a cloud-enabled job scheduler, which can acquire VMs on-demand to service jobs. The simulator uses a FCFS scheduling policy, and also implements each of our waiting policies. We have implemented NJW (no jobs waiting), AJW (all jobs waiting), AJW-T (all jobs waiting threshold), SWW (short waits wait), LJW (Long jobs waiting), and Compound policy. 
+We implemented a trace-driven job simulator in python that mimics a cloud-enabled job scheduler, which can acquire VMs on-demand to service jobs. The simulator uses a FCFS scheduling policy, and also implements each of our waiting policies. We have implemented NJW (no jobs waiting), AJW (all jobs waiting), AJW-T (all jobs waiting threshold), SWW (short waits wait), LJW (Long jobs waiting), and Compound policy.
 
 ## To run the simulator (simulator.py)
 
@@ -45,7 +45,7 @@ sim.run_LJW(max_wait_time_min=b, long_thresh_min=t, cpd=True)
 
 *3.* The simulator’s output is the mean waiting time w, the effective price P, the fraction of jobs that run on on-demand resources r, and the total cost C.
 
-*4.* Note that simulator needs to be reset to change either the cluster config or the input trace, we provide following functions to do that. Please check the simulator.py for further details.
+*4.* Simulator needs to be reset to change either the cluster config or the input trace, we provide following functions to do that. Please check the simulator.py for further details. Note that, simulator needs to be reset between the simulation runs, you can do that by using reset_cluster_config function and pass the current cluster config information (i.e., reserve capacity, cpu per reserve machine, and memory per reserve machine).
 
 ```python
 reset_cluster_config()
