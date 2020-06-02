@@ -8,6 +8,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 import os
+import random
 import sys
 import time
 from collections import deque
@@ -30,11 +31,20 @@ def estimate_ondemand_cost(ondemand_df: pd.DataFrame) -> float:
   """
   ondemand_df: input ondemand jobs dataframe
   """
+  # Add cpu_dominant to compute on-demand costs
+  ondemand_df['mem_GB'] = ondemand_df['total_MB_req'] / 1024
+  ondemand_df['cpu_dominant'] = ondemand_df.apply(
+												lambda x: x['num_cores'] if x['num_cores'] >= 0.25 * x['mem_GB'] else 0.25 * x['mem_GB'], axis = 1)
+  ondemand_df['cpu_dominant'] = np.ceil(ondemand_df['cpu_dominant'])
+
   best_cost = 0.0
   i = 0
   for j in range(i, len(INSTANCE_CPUS)-1):
     curr_cost = compute_perfect_fit(INSTANCE_CPUS[j], INSTANCE_CPUS[j+1], ondemand_df)
     best_cost += curr_cost
+  
+  # Remove temporary columns
+  ondemand_df = ondemand_df.drop(['mem_GB', 'cpu_dominant'], axis=1)
   return best_cost
 
 def compute_perfect_fit(b1: int, b2: int, df: pd.DataFrame) -> float:
@@ -431,7 +441,7 @@ class Simulator:
   """
   Run the simulator (event based) with waiting queue. Applicable to LJW and compound policy.
   """
-  def run_LJW(self, max_wait_time_min: int, long_thresh_min: int,
+  def run_LJW(self, max_wait_time_min: int, short_thresh_min: int,
            cpd:bool = False, duration_hrs:int = None) -> tuple:
     # start time of simulation; for measuring the total simulation time
     t_start =time.time()
@@ -456,7 +466,7 @@ class Simulator:
         cpu_req, mem_req_gb = cur_job.num_cores, cur_job.total_MB_req / 1024.0
         runtime_sec = cur_job.wallclock_runtime_sec
 
-        if runtime_sec <= long_thresh_min * 60:
+        if runtime_sec <= short_thresh_min * 60:
           # Run the job on on-demand -- Short job
           on_demand_count += 1
           self.job_schedule_map[cur_job.job_id] = 'D'
@@ -539,18 +549,154 @@ class Simulator:
     return (mean_wait_time_sec, effective_price, balking_rate, total_cost)
 
 
+  """
+  Run the simulator (event based) with waiting queue. 
+  Applicable to LJW and compound policy with with error in predictions.
+  t_error (0.0-1.0): short/long job prediction error,  which is both the percentage of long jobs we mispredict as short, and short jobs we mispredict as long.
+  b_error (0.0-1.0): waiting time threshold error, which is both the percentage of jobs that should wait but do not, and that do not but should.
+  """
+  def run_LJW_error(self, max_wait_time_min: int, short_thresh_min: int,
+           cpd:bool = False, duration_hrs:int = None,
+           t_error:float = 0.0, b_error:float = 0.0) -> tuple:
+    # start time of simulation; for measuring the total simulation time
+    t_start =time.time()
+
+    # book keeping
+    reserve_cpu_time = 0
+    on_demand_count = 0
+
+    # Next event for the simulator
+    next_event = self._get_next_event()
+
+    # For computing cost
+    start = end = self.input_trace.iloc[0].time
+
+    # Extra wait time (due to misprediction error i.e. b_error)
+    extra_total_wt_time_sec = 0
+
+    while next_event:
+      if next_event.etype == etype.schedule:
+        # New job request
+        cur_job = self.input_trace.iloc[next_event.job_id]
+        cur_time = next_event.time
+
+        # Job requirements
+        cpu_req, mem_req_gb = cur_job.num_cores, cur_job.total_MB_req / 1024.0
+        runtime_sec = cur_job.wallclock_runtime_sec
+
+        # short job threshold
+        is_short_job = runtime_sec <= short_thresh_min * 60
+        is_long_job = not is_short_job
+
+        # short/long job prediction
+        is_pred_right = random.random() > t_error
+        is_pred_wrong = not is_pred_right
+
+        if (is_short_job and is_pred_right) or (is_long_job and is_pred_wrong):
+          on_demand_count += 1
+          self.job_schedule_map[cur_job.job_id] = 'D'
+        else:
+          if (not self.wait_queue) and self._schedule_job(cur_time, cpu_req,
+                                                        mem_req_gb, runtime_sec, next_event.job_id):
+            # Book keeping
+            reserve_cpu_time += cpu_req * runtime_sec
+            end = max(end, cur_time + timedelta(seconds=int(runtime_sec)))
+          else:
+            # Add job to wait queue
+            self.wait_queue.append(cur_job.job_id)
+      else:
+        # A job is finished. So, check the wait queue
+        while len(self.wait_queue) > 0:
+          job_id = self.wait_queue[0]
+          waiting_job = self.input_trace.iloc[job_id]
+          time_waited_sec = (next_event.time - waiting_job.time).total_seconds()
+
+          # Compute maximum balking time
+          max_wait_time_sec = max_wait_time_min * 60
+
+          # Check if job waited more than the balking time; account for misprediction
+          max_wt_time_exceeded = time_waited_sec > max_wait_time_sec
+          wt_pred_right = random.random() > b_error
+          wt_pred_wrong = not wt_pred_right
+          if max_wt_time_exceeded or (not max_wt_time_exceeded and wt_pred_wrong):
+            # Remove the job from the queue
+            self.wait_queue.popleft()
+            self.wait_time_map[job_id] = max_wait_time_sec
+            self.job_schedule_map[job_id] = 'D'
+            on_demand_count += 1
+            
+            # Book keeping
+            end = max(end, next_event.time + timedelta(seconds=int(runtime_sec)))
+
+            # Accounting for misprediction
+            if max_wt_time_exceeded and wt_pred_wrong:
+              extra_total_wt_time_sec += max_wait_time_sec
+          else:
+            # Try scheduling the job
+            cpu_req, mem_req_gb = waiting_job.num_cores, waiting_job.total_MB_req / 1024.0
+            runtime_sec = waiting_job.wallclock_runtime_sec
+            if self._schedule_job(next_event.time, cpu_req, mem_req_gb, runtime_sec, job_id):
+              # Book keeping
+              reserve_cpu_time += cpu_req * runtime_sec
+
+              # remove the job from the queue
+              self.wait_queue.popleft()
+
+              # Add waiting time to wait times map
+              self.wait_time_map[job_id] = time_waited_sec
+
+              end = max(end, next_event.time + timedelta(seconds=int(runtime_sec)))
+            else:
+              break
+      next_event = self._get_next_event()
+
+    t_end = time.time()
+    print ("Time taken in seconds is ", t_end - t_start)
+
+    # Post- Simulation: Add schedule column and wait_time column to input dataframe
+    self.input_trace['schedule'] = self.input_trace['job_id'].map(self.job_schedule_map).fillna('D')
+    self.input_trace['wait_time_sec'] = self.input_trace['job_id'].map(self.wait_time_map).fillna(0)
+    
+    # Steady state
+    h = 0.0001 # head
+    steady_state = self.input_trace[(self.input_trace.job_id >= h * self.job_count) \
+                                     & (self.input_trace.job_id <= (1.0-h)*self.job_count)]
+    total_wait_time_sec = steady_state[steady_state.schedule == 'R'].wait_time_sec.sum()
+    balking_rate = 1 - self.input_trace[self.input_trace.schedule == 'R'].time.count() / self.input_trace.time.count()
+    
+    # LJW and Compound policy -- Account for extra waiting time in the case of mispredictions.
+    total_wait_time_sec += extra_total_wt_time_sec
+    mean_wait_time_sec = total_wait_time_sec / self.input_trace.time.count()
+
+    # Simulation time
+    elapsed_simulation_time = (end - start).total_seconds()
+
+    # User has not specified trace duration
+    if duration_hrs is None:
+      duration_hrs = elapsed_simulation_time / 3600
+
+    # Computing total cost
+    total_cost, reserved_cost, on_demand_cost, effective_price = self._compute_total_cost(self.input_trace, duration_hrs)
+    print ("Reserved cost is ", reserved_cost, ", On demand cost is ",
+             on_demand_cost, ", Total cost is ", reserved_cost + on_demand_cost)  
+    print ("----------------------------------------------------------------")
+
+    return (mean_wait_time_sec, effective_price, balking_rate, total_cost)
+
+
 if __name__ == "__main__":
   year = 2016
-  # input_trace = pd.read_hdf(os.path.abspath('../traces/traces-{}.h5'.format(year)))
+  input_trace = pd.read_hdf(os.path.abspath('../traces/traces-{}.h5'.format(year)))
 
-  # TODO: Refactor large job requirements -- Do this in csvtohdf
-  # num_cores = np.array(input_trace['num_cores'].values.tolist())
-  # total_mem = np.array(input_trace['total_MB_req'].values.tolist())
-  # input_trace['num_cores'] = np.where(num_cores > 40, 40, num_cores).tolist()
-  # input_trace['total_MB_req'] = np.where(total_mem > 128 * 1024, 128 * 1024, total_mem).tolist()
+  # Refactor very large job requirements
+  num_cores = np.array(input_trace['num_cores'].values.tolist())
+  total_mem = np.array(input_trace['total_MB_req'].values.tolist())
+  input_trace['num_cores'] = np.where(num_cores > 40, 40, num_cores).tolist()
+  input_trace['total_MB_req'] = np.where(total_mem > 128 * 1024, 128 * 1024, total_mem).tolist()
 
   input_trace = pd.read_hdf(os.path.abspath('../synthetic_traces/synthetic-trace-2025.h5'))
-  new_sim = Simulator(year, 108, 1, 4, input_trace)
-  print(new_sim.run_NJW())
+  new_sim = Simulator(year, 150, 64, 256, input_trace)
+  # print(new_sim.run_NJW())
   # print(new_sim.run_AJWT(max_wait_time_min=15, SWW=False))
-  # print(new_sim.run_LJW(max_wait_time_min=15, long_thresh_min=3, cpd=True))
+  print(new_sim.run_LJW(max_wait_time_min=1440, short_thresh_min=3, cpd=True))
+  # print(new_sim.run_LJW_error(max_wait_time_min=1440, short_thresh_min=3, cpd=True, t_error=0.08, b_error=0.20))

@@ -34,13 +34,13 @@ b = 15 # maximum wait time in minutes
 sim.run_AJWT(max_wait_time_min=b, SWW=True)
 
 # LJW
-t = 3 # Long job threshold in minutes
-sim.run_LJW(max_wait_time_min=sys.maxsize, long_thresh_min=3, cpd=False)
+t = 3 # Short job threshold in minutes
+sim.run_LJW(max_wait_time_min=sys.maxsize, short_thresh_min=3, cpd=False)
 
 # Compound
 b = 15 # maximum wait time in minutes
-t = 3 # Long job threshold in minutes
-sim.run_LJW(max_wait_time_min=b, long_thresh_min=t, cpd=True)
+t = 3 # Short job threshold in minutes
+sim.run_LJW(max_wait_time_min=b, short_thresh_min=t, cpd=True)
 ```
 
 *3.* The simulator’s output is the mean waiting time w, the effective price P, the fraction of jobs that run on on-demand resources r, and the total cost C.
