@@ -694,7 +694,7 @@ if __name__ == "__main__":
   input_trace['num_cores'] = np.where(num_cores > 40, 40, num_cores).tolist()
   input_trace['total_MB_req'] = np.where(total_mem > 128 * 1024, 128 * 1024, total_mem).tolist()
 
-  input_trace = pd.read_hdf(os.path.abspath('../synthetic_traces/synthetic-trace-2025.h5'))
+  # input_trace = pd.read_hdf(os.path.abspath('../synthetic_traces/synthetic-trace-2025.h5'))
   new_sim = Simulator(year, 150, 64, 256, input_trace)
   # print(new_sim.run_NJW())
   # print(new_sim.run_AJWT(max_wait_time_min=15, SWW=False))
