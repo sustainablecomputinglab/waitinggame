@@ -31,11 +31,11 @@ def estimate_ondemand_cost(ondemand_df: pd.DataFrame) -> float:
   """
   ondemand_df: input ondemand jobs dataframe
   """
-  # Add cpu_dominant to compute on-demand costs
-  ondemand_df['mem_GB'] = ondemand_df['total_MB_req'] / 1024
-  ondemand_df['cpu_dominant'] = ondemand_df.apply(
-												lambda x: x['num_cores'] if x['num_cores'] >= 0.25 * x['mem_GB'] else 0.25 * x['mem_GB'], axis = 1)
-  ondemand_df['cpu_dominant'] = np.ceil(ondemand_df['cpu_dominant'])
+  # # Add cpu_dominant to compute on-demand costs
+  # ondemand_df['mem_GB'] = ondemand_df['total_MB_req'] / 1024
+  # ondemand_df['cpu_dominant'] = ondemand_df.apply(
+	# 											lambda x: x['num_cores'] if x['num_cores'] >= 0.25 * x['mem_GB'] else 0.25 * x['mem_GB'], axis = 1)
+  # ondemand_df['cpu_dominant'] = np.ceil(ondemand_df['cpu_dominant'])
 
   best_cost = 0.0
   i = 0
@@ -43,8 +43,8 @@ def estimate_ondemand_cost(ondemand_df: pd.DataFrame) -> float:
     curr_cost = compute_perfect_fit(INSTANCE_CPUS[j], INSTANCE_CPUS[j+1], ondemand_df)
     best_cost += curr_cost
   
-  # Remove temporary columns
-  ondemand_df = ondemand_df.drop(['mem_GB', 'cpu_dominant'], axis=1)
+  # # Remove temporary columns
+  # ondemand_df = ondemand_df.drop(['mem_GB', 'cpu_dominant'], axis=1)
   return best_cost
 
 def compute_perfect_fit(b1: int, b2: int, df: pd.DataFrame) -> float:
