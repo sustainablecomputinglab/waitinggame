@@ -6,7 +6,7 @@ In this repository, we host the code for our SC paper submission. The repository
 * Synthetic Trace Generator
 * Simulator
 
-To run code implementation for each of these sections, please check readme file in their respective folders.
+To run code implementation for each of these sections (along with **synthetic_traces** folder), please check readme file in their respective folders.
 
 ## Requirements
 
@@ -14,8 +14,10 @@ To run code implementation for each of these sections, please check readme file 
 
 2. Python libraries from attachment requirement.txt file.
 
-## Data Format
+## Data
 
-In this work, we use pandas to read the data sets (or traces) and the pandas dataframes are used as input to the implemented simulator.
+1. Synthetic traces (hdf format) used for experiments are provided in the **synthetic_traces** folder.
 
-Please note that Real World Trace (hdf format): https://umass.box.com/s/53qbzafs27wu28jh165twykqegwerud3
+2. Real World Trace (hdf format): https://umass.box.com/s/53qbzafs27wu28jh165twykqegwerud3
+
+3. In this work, we use pandas to read the data sets (or traces) and the pandas dataframes are used as input to the implemented simulator.
